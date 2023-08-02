@@ -51,44 +51,65 @@ for idx,entry in enumerate(partionTableEntries):
     Num_of_Sector = partitionTableEntry[5]
     startAddress = LBA_Address*_SECTOR_SIZE
     size = Num_of_Sector*_SECTOR_SIZE
+    
     if types[partionType]=="Extend":
-        #EBR로 이동 및 Read 
-        image_file.seek(startAddress*512)
-        EBR = image_file.read(_SECTOR_SIZE)
-        EBR = struct.unpack(_EBR_STRUCT,EBR)
+        pivotAddress = startAddress
+        offset = 0
         while True:
-            partition = EBR[1]
-            partiton = struct.unpack(_PTE_STRUCT,partition)
-            isActive = partiton[0]
-            CHS_Address = partiton[1]
-            partionType = partiton[2]
-            CHS_Address = partition[3]
-            LBA_Address = partition[4]
-            Num_of_Sector = partition[5]
-            startAddress = LBA_Address*_SECTOR_SIZE
-            size = Num_of_Sector*_SECTOR_SIZE
-            partitions.append({
-                "index" : idx+1,
-                "FilsSystem" : types[partionType],
-                "StartAddress" : str(startAddress),
-                "Size" : str(size)
-            })
-
+            nowAddress = pivotAddress+offset
+            #EBR로 이동 및 Read 
+            image_file.seek(nowAddress) # EBR 섹터 시작 주소 
+            EBR = image_file.read(_SECTOR_SIZE) # 512 byte read 
+            EBR = struct.unpack(_EBR_STRUCT,EBR)
+            partition = EBR[1] 
             nextEBR = EBR[2]
-            if(int.from_bytes(nextEBR)==0):
+            
+
+            # 여기서부터는 상대 주소를 사용해서 file seek
+            unpacked_partition = struct.unpack(_PTE_STRUCT,partition)
+            isActive = unpacked_partition[0]
+            CHS_Address = unpacked_partition[1]
+            partionType = unpacked_partition[2]
+            CHS_Address = unpacked_partition[3]
+            LBA_Address = unpacked_partition[4]
+            Num_of_Sector = unpacked_partition[5]
+            startAddress = (nowAddress+LBA_Address)*_SECTOR_SIZE
+            size = Num_of_Sector*_SECTOR_SIZE
+            
+            partitions.append([
+                types[partionType],
+                str(startAddress),
+                str(size)
+            ])
+
+            if(int.from_bytes(nextEBR,byteorder='big')==0):
                 break
+            
+            unpacked_nextEBR = struct.unpack(_PTE_STRUCT,nextEBR)
+        
+            isActive = unpacked_nextEBR[0]
+            CHS_Address = unpacked_nextEBR[1]
+            partionType = unpacked_nextEBR[2]
+            CHS_Address = unpacked_nextEBR[3]
+            start_Address = unpacked_nextEBR[4]
+            Num_of_Sector = unpacked_nextEBR[5]
+
+            offset = start_Address*_SECTOR_SIZE
+            
+            
 
     else:
-        partitions.append({
-            "index" : idx+1,
-            "FilsSystem" : types[partionType],
-            "StartAddress" : str(startAddress),
-            "Size" : str(size)
-        })
+        partitions.append([
+            types[partionType],
+            str(startAddress),
+            str(size)
+        ])
 
 
-for i in partitions:
-    print("index : "+str(i))
-    print("     FileSystem : ")
-    print("     StartAddress : ")
-    print("     Size : ")
+
+for i,partition in enumerate(partitions):
+
+    print("index : "+str(i+1))
+    print("     FileSystem : "+partition[0])
+    print("     StartAddress : "+partition[1])
+    print("     Size : "+partition[2])
